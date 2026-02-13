@@ -27,7 +27,8 @@
   "author": "MCP Framework Team",
   "license": "MIT",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "winston": "3.19.0"
   },
   "engines": {
     "node": ">=18.0.0"

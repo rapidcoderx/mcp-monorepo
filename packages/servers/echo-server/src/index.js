@@ -7,7 +7,7 @@
  */
 
 import { parseArgs } from 'node:util';
-import { BaseMCPServer, Logger, validateRequired } from '@mcp/core';
+import { BaseMCPServer, validateRequired } from '@mcp/core';
 
 /**
  * Echo server that demonstrates MCP framework usage
@@ -27,10 +27,6 @@ class EchoServer extends BaseMCPServer {
       },
       ...config,
     });
-
-    // Logger is set after super() so it's not available in setupHandlers.
-    // Handlers use this.logger directly (resolved at call time, not capture time).
-    this.logger = new Logger({ level: 'info' });
   }
 
   /**
@@ -53,7 +49,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        this.logger?.info(`Echo tool called with text: ${params.text}`);
+        this.logger?.info('Echo tool called', { text: params.text });
         validateRequired(params, ['text']);
 
         return {
@@ -82,7 +78,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        this.logger?.info(`Reverse tool called with text: ${params.text}`);
+        this.logger?.info('Reverse tool called', { text: params.text });
         validateRequired(params, ['text']);
 
         const reversed = params.text.split('').reverse().join('');
@@ -113,7 +109,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        this.logger?.info(`Uppercase tool called with text: ${params.text}`);
+        this.logger?.info('Uppercase tool called', { text: params.text });
         validateRequired(params, ['text']);
 
         return {
@@ -156,7 +152,7 @@ ${this.config.transport === 'http' ? `Port: ${this.config.port}` : ''}`,
       },
     });
 
-    this.logger?.info('Echo server handlers registered successfully');
+    this.logger?.info('Echo server handlers registered');
   }
 }
 
@@ -175,6 +171,10 @@ const { values } = parseArgs({
       type: 'string',
       default: '0.0.0.0',
     },
+    'log-level': {
+      type: 'string',
+      default: 'info',
+    },
   },
 });
 
@@ -183,6 +183,7 @@ const server = new EchoServer({
   transport: values.transport,
   port: parseInt(values.port),
   host: values.host,
+  logLevel: values['log-level'],
 });
 
 // Start the server
@@ -190,13 +191,13 @@ await server.start();
 
 // Handle shutdown gracefully
 process.on('SIGINT', async () => {
-  console.error('\nShutting down Echo server...');
+  server.logger.info('Shutting down (SIGINT)');
   await server.stop();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
-  console.error('\nShutting down Echo server...');
+  server.logger.info('Shutting down (SIGTERM)');
   await server.stop();
   process.exit(0);
 });

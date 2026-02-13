@@ -12,6 +12,7 @@ export {
   formatError,
   validateParams,
   Logger,
+  createLogger,
   createRequestLogger,
 } from './middleware/index.js';
 

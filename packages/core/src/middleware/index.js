@@ -4,4 +4,4 @@
  */
 
 export { withErrorHandling, formatError, validateParams } from './error-handler.js';
-export { Logger, createRequestLogger } from './logger.js';
+export { Logger, createLogger, createRequestLogger } from './logger.js';

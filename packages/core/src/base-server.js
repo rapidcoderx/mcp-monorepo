@@ -22,6 +22,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import http from 'node:http';
 import { randomUUID } from 'node:crypto';
+import { Logger } from './middleware/logger.js';
 
 /**
  * Transport type enumeration
@@ -63,6 +64,7 @@ export class BaseMCPServer {
    * @param {string} [config.transport='stdio'] - Transport type ('stdio' or 'http')
    * @param {number} [config.port=3000] - HTTP port (only for http transport)
    * @param {string} [config.host='localhost'] - HTTP host (only for http transport)
+   * @param {string} [config.logLevel='info'] - Log level (error | warn | info | debug)
    */
   constructor(config) {
     this.config = {
@@ -71,6 +73,12 @@ export class BaseMCPServer {
       host: 'localhost',
       ...config,
     };
+
+    /** @type {Logger} Logger instance — subclasses may replace this before or after super(). */
+    this.logger = new Logger({
+      level: this.config.logLevel || 'info',
+      component: this.config.name,
+    });
 
     /** @type {http.Server|null} */
     this.httpServer = null;
@@ -203,7 +211,7 @@ export class BaseMCPServer {
     try {
       return await tool.handler(request.params.arguments || {});
     } catch (error) {
-      console.error(`Error executing tool ${toolName}:`, error);
+      this.logger.error(`Error executing tool: ${toolName}`, { error: error.message, stack: error.stack });
       return {
         content: [{ type: 'text', text: `Error: ${error.message}` }],
         isError: true,
@@ -247,7 +255,7 @@ export class BaseMCPServer {
     try {
       return await resource.handler(resourceUri);
     } catch (error) {
-      console.error(`Error reading resource ${resourceUri}:`, error);
+      this.logger.error(`Error reading resource: ${resourceUri}`, { error: error.message, stack: error.stack });
       throw error;
     }
   }
@@ -264,7 +272,7 @@ export class BaseMCPServer {
   async _startStdio() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    console.error(`${this.config.name} MCP server running on stdio`);
+    this.logger.info('MCP server running on stdio');
   }
 
   // ---------------------------------------------------------------------------
@@ -375,7 +383,7 @@ export class BaseMCPServer {
         res.end(JSON.stringify({ error: 'Method not allowed' }));
       }
     } catch (error) {
-      console.error(`[${this.config.name}] MCP request error:`, error.message);
+      this.logger.error('MCP request error', { error: error.message });
       if (!res.headersSent) {
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(
@@ -408,7 +416,7 @@ export class BaseMCPServer {
       sessionIdGenerator: () => randomUUID(),
       onsessioninitialized: (sessionId) => {
         // Store *after* the SDK assigns the ID — avoids race conditions
-        console.error(`[${this.config.name}] Session initialized: ${sessionId}`);
+        this.logger.info('Session initialized', { sessionId });
         this._sessions.set(sessionId, { transport, server: serverInstance });
       },
     });
@@ -417,7 +425,7 @@ export class BaseMCPServer {
     transport.onclose = () => {
       const sid = transport.sessionId;
       if (sid && this._sessions.has(sid)) {
-        console.error(`[${this.config.name}] Session closed: ${sid}`);
+        this.logger.info('Session closed', { sessionId: sid });
         this._sessions.delete(sid);
       }
     };
@@ -485,10 +493,11 @@ export class BaseMCPServer {
     return new Promise((resolve, reject) => {
       this.httpServer.listen(this.config.port, this.config.host, () => {
         const base = `http://${this.config.host}:${this.config.port}`;
-        console.error(`${this.config.name} MCP server running on ${base}`);
-        console.error(`  - MCP endpoint: ${base}/mcp`);
-        console.error(`  - Info endpoint: ${base}/info`);
-        console.error(`  - Health check: ${base}/health`);
+        this.logger.info(`MCP server running on ${base}`, {
+          mcp: `${base}/mcp`,
+          info: `${base}/info`,
+          health: `${base}/health`,
+        });
         resolve();
       });
       this.httpServer.on('error', reject);
@@ -528,7 +537,7 @@ export class BaseMCPServer {
       try {
         await session.transport.close();
         await session.server.close();
-        console.error(`[${this.config.name}] Closed session: ${sessionId}`);
+        this.logger.debug('Closed session during shutdown', { sessionId });
       } catch {
         // Ignore cleanup errors
       }
@@ -546,7 +555,7 @@ export class BaseMCPServer {
     if (this.httpServer) {
       return new Promise((resolve) => {
         this.httpServer.close(() => {
-          console.error(`${this.config.name} server stopped`);
+          this.logger.info('Server stopped');
           resolve();
         });
       });
