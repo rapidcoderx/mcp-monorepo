@@ -289,7 +289,7 @@ export class BaseMCPServer {
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
     res.setHeader(
       'Access-Control-Allow-Headers',
-      'Content-Type, mcp-session-id, Last-Event-ID, Authorization',
+      'Content-Type, mcp-session-id, mcp-protocol-version, Last-Event-ID, Authorization',
     );
     res.setHeader('Access-Control-Expose-Headers', 'mcp-session-id');
   }
