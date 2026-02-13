@@ -7,7 +7,6 @@
   "exports": {
     ".": "./src/index.js",
     "./base-server": "./src/base-server.js",
-    "./transports": "./src/transports/index.js",
     "./middleware": "./src/middleware/index.js",
     "./utils": "./src/utils/index.js",
     "./validators": "./src/validators/index.js"

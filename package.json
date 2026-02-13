@@ -37,9 +37,14 @@
     "update:packages": "ncu -u",
     "update:packages:all": "ncu -u --workspaces",
     "update:interactive": "ncu -i --workspaces",
-    "update:install": "ncu -u --workspaces && npm install"
+    "update:install": "ncu -u --workspaces && npm install",
+    "inspector": "npx @modelcontextprotocol/inspector",
+    "inspect:echo": "npx @modelcontextprotocol/inspector node packages/servers/echo-server/src/index.js",
+    "inspect:echo:http": "npx @modelcontextprotocol/inspector http://localhost:3000/mcp",
+    "inspect:remote": "npx @modelcontextprotocol/inspector"
   },
   "devDependencies": {
+    "@modelcontextprotocol/inspector": "^0.20.0",
     "concurrently": "^9.2.1",
     "eslint": "^10.0.0",
     "prettier": "^3.8.1"

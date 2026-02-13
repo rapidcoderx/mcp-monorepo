@@ -129,3 +129,72 @@ This file tracks all AI agent activities, decisions, and progress throughout the
 | 2026-02-12 21:50 | Started echo server | ✅ |
 | 2026-02-12 21:50 | Started dashboard on 5174 | ✅ |
 | 2026-02-12 21:50 | Tested multi-server UI | ✅ |
+| 2026-02-12 22:39 | Added MCP Inspector package | ✅ |
+| 2026-02-12 22:39 | Created inspector scripts | ✅ |
+| 2026-02-12 22:41 | Added remote HTTP inspection | ✅ |
+| 2026-02-12 22:44 | Fixed inspector port conflict | ✅ |
+| 2026-02-12 22:44 | Set inspector to port 5175 | ✅ |
+| 2026-02-12 22:47 | Corrected to default ports (6274/6277) | ✅ |
+| 2026-02-12 22:51 | Fixed HTTP transport connection error | ✅ |
+| 2026-02-12 22:51 | Each HTTP connection gets own Server instance | ✅ |
+| 2026-02-12 22:55 | Added CORS headers and error handling | ✅ |
+| 2026-02-12 22:55 | Added debug logging for MCP connections | ✅ |
+| 2026-02-12 23:00 | Enhanced CORS with Authorization header | ✅ |
+| 2026-02-12 23:00 | Improved logging with request details | ✅ |
+| 2026-02-12 23:05 | Fixed StreamableHTTPServerTransport usage | ✅ |
+| 2026-02-12 23:05 | Implemented transport.handleRequest() pattern | ✅ |
+| 2026-02-12 23:05 | Added request body parsing and stateless mode | ✅ |
+
+---
+
+## Session 2 - SDK Alignment Refactor (February 13, 2026)
+
+### Agent: GitHub Copilot (Claude Opus 4.6)
+
+### Activities:
+- Audited base-server.js against MCP SDK v1.26.0 patterns
+- Reviewed SDK examples (simpleStreamableHttp.js) and transport source
+- Identified 8 critical issues in core HTTP transport implementation
+- Rewrote base-server.js with SDK-aligned session management
+- Fixed echo-server logger bug (captured undefined reference)
+- End-to-end tested full MCP session lifecycle
+
+### Issues Fixed:
+1. **HTTP transport only handled POST** — now handles POST, GET (SSE), DELETE (session close) per MCP spec
+2. **Stateless-only transport** — now uses stateful sessions with `sessionIdGenerator: () => randomUUID()`
+3. **Missing `isInitializeRequest` check** — new sessions only created for initialize requests
+4. **Duplicate handler registration** — `registerTool()` no longer calls `setRequestHandler` (handlers set once in `_createServerInstance`)
+5. **Constructor order** — server instance created AFTER `setupHandlers()` populates tool/resource maps
+6. **CORS headers incomplete** — added `DELETE` to methods, `mcp-session-id` + `Last-Event-ID` to allowed headers
+7. **No session cleanup** — `stop()` now closes all active sessions before shutting down HTTP listener
+8. **Echo-server logger bug** — `const logger = this.logger` captured `undefined`; changed to `this.logger?.info(...)` (resolved at call time)
+9. **Phantom exports** — removed `./transports` from core package.json (file doesn't exist)
+
+### Decisions Made:
+1. **Kept low-level Server class** — `McpServer` requires Zod schemas which would break the JSON Schema API; `Server` is still functional for framework use
+2. **Stateful by default** — each HTTP session gets its own `Server` + `StreamableHTTPServerTransport` pair, stored by session ID
+3. **Resource handlers always registered** — no conditional check on `this.resources.size`, simplifies dynamic resource addition
+
+### Test Results:
+- ✅ Syntax check passes for both files
+- ✅ Health endpoint returns `{"status":"healthy"}`
+- ✅ Info endpoint returns full server metadata
+- ✅ MCP initialize creates session with UUID
+- ✅ `notifications/initialized` accepted
+- ✅ `tools/call` echo returns correct result
+- ✅ `tools/call` reverse returns correct result
+- ✅ `tools/list` returns all 3 tools
+- ✅ `resources/list` returns resource
+- ✅ DELETE terminates session, `onclose` fires
+- ✅ Logger now works in tool handlers (confirmed in server logs)
+
+| Timestamp | Activity | Status |
+|-----------|----------|--------|
+| 2026-02-13 06:15 | Reviewed base-server.js & SDK patterns | ✅ |
+| 2026-02-13 06:18 | Rewrote base-server.js (SDK-aligned) | ✅ |
+| 2026-02-13 06:19 | Fixed echo-server logger bug | ✅ |
+| 2026-02-13 06:20 | Syntax checks passed | ✅ |
+| 2026-02-13 06:21 | HTTP transport tested (health, info, MCP) | ✅ |
+| 2026-02-13 06:24 | Full session lifecycle test passed | ✅ |
+| 2026-02-13 06:25 | Fixed phantom transports export | ✅ |
+

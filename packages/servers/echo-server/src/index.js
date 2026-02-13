@@ -18,10 +18,6 @@ class EchoServer extends BaseMCPServer {
    * @param {Object} config - Server configuration
    */
   constructor(config) {
-    // Initialize logger first, before calling super
-    // so it's available when setupHandlers is called
-    const logger = new Logger({ level: 'info' });
-
     super({
       name: 'echo-server',
       version: '1.0.0',
@@ -32,7 +28,9 @@ class EchoServer extends BaseMCPServer {
       ...config,
     });
 
-    this.logger = logger;
+    // Logger is set after super() so it's not available in setupHandlers.
+    // Handlers use this.logger directly (resolved at call time, not capture time).
+    this.logger = new Logger({ level: 'info' });
   }
 
   /**
@@ -40,8 +38,6 @@ class EchoServer extends BaseMCPServer {
    * @protected
    */
   setupHandlers() {
-    const logger = this.logger;
-
     // Register echo tool
     this.registerTool({
       name: 'echo',
@@ -57,10 +53,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        if (logger) {
-          logger.info(`Echo tool called with text: ${params.text}`);
-        }
-
+        this.logger?.info(`Echo tool called with text: ${params.text}`);
         validateRequired(params, ['text']);
 
         return {
@@ -89,10 +82,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        if (logger) {
-          logger.info(`Reverse tool called with text: ${params.text}`);
-        }
-
+        this.logger?.info(`Reverse tool called with text: ${params.text}`);
         validateRequired(params, ['text']);
 
         const reversed = params.text.split('').reverse().join('');
@@ -123,10 +113,7 @@ class EchoServer extends BaseMCPServer {
         required: ['text'],
       },
       handler: async (params) => {
-        if (logger) {
-          logger.info(`Uppercase tool called with text: ${params.text}`);
-        }
-
+        this.logger?.info(`Uppercase tool called with text: ${params.text}`);
         validateRequired(params, ['text']);
 
         return {
@@ -169,9 +156,7 @@ ${this.config.transport === 'http' ? `Port: ${this.config.port}` : ''}`,
       },
     });
 
-    if (logger) {
-      logger.info('Echo server handlers registered successfully');
-    }
+    this.logger?.info('Echo server handlers registered successfully');
   }
 }
 
