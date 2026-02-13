@@ -1,0 +1,60 @@
+{
+  "name": "mcp-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Monorepo framework for reusable MCP (Model Context Protocol) servers",
+  "author": "MCP Framework Team",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/servers/*",
+    "packages/dashboard"
+  ],
+  "scripts": {
+    "install:all": "npm install",
+    "lint": "eslint packages/*/src/**/*.js",
+    "lint:fix": "eslint packages/*/src/**/*.js --fix",
+    "format": "prettier --write \"packages/*/src/**/*.js\"",
+    "format:check": "prettier --check \"packages/*/src/**/*.js\"",
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "clean": "npm run clean --workspaces --if-present && rm -rf node_modules",
+    "dev:dashboard": "npm run dev -w @mcp/dashboard",
+    "dev:echo": "npm run start:http -w @mcp/echo-server",
+    "dev:config": "npm run serve -w @mcp/dashboard",
+    "dev:all": "concurrently \"npm run dev:echo\" \"npm run dev:config\" \"npm run dev:dashboard\"",
+    "start:demo": "npm run dev:all",
+    "serve:dashboard": "npm run serve -w @mcp/dashboard",
+    "build:dashboard": "npm run build -w @mcp/dashboard",
+    "build:serve:dashboard": "npm run build:serve -w @mcp/dashboard",
+    "check:updates": "ncu",
+    "check:updates:all": "ncu --workspaces",
+    "update:packages": "ncu -u",
+    "update:packages:all": "ncu -u --workspaces",
+    "update:interactive": "ncu -i --workspaces",
+    "update:install": "ncu -u --workspaces && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "eslint": "^10.0.0",
+    "prettier": "^3.8.1"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "monorepo",
+    "server",
+    "framework",
+    "ai",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/mcp-monorepo.git"
+  }
+}

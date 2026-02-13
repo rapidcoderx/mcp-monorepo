@@ -1,0 +1,35 @@
+{
+  "name": "@mcp/echo-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Sample MCP server that echoes input - demonstrates framework usage",
+  "main": "src/index.js",
+  "bin": {
+    "mcp-echo-server": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "start:stdio": "node src/index.js --transport=stdio",
+    "start:http": "node src/index.js --transport=http --port=3000",
+    "dev": "node --watch src/index.js --transport=stdio",
+    "dev:http": "node --watch src/index.js --transport=http --port=3000",
+    "lint": "eslint src/**/*.js",
+    "lint:fix": "eslint src/**/*.js --fix",
+    "format": "prettier --write \"src/**/*.js\""
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "echo",
+    "sample",
+    "example"
+  ],
+  "author": "MCP Framework Team",
+  "license": "MIT",
+  "dependencies": {
+    "@mcp/core": "*"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

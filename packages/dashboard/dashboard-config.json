@@ -1,0 +1,17 @@
+{
+  "dashboard": {
+    "title": "MCP Server Dashboard",
+    "port": 8080,
+    "description": "Centralized management interface for MCP servers"
+  },
+  "servers": [
+    {
+      "id": "echo",
+      "name": "Echo Server",
+      "url": "http://localhost:3000",
+      "enabled": true,
+      "description": "Text transformation tools (echo, reverse, uppercase)",
+      "color": "#4CAF50"
+    }
+  ]
+}

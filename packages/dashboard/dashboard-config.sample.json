@@ -1,0 +1,49 @@
+{
+  "dashboard": {
+    "title": "MCP Server Dashboard",
+    "port": 8080,
+    "description": "Centralized management interface for MCP servers"
+  },
+  "servers": [
+    {
+      "id": "echo",
+      "name": "Echo Server",
+      "url": "http://localhost:3000",
+      "enabled": true,
+      "description": "Text transformation tools (echo, reverse, uppercase)",
+      "color": "#4CAF50"
+    },
+    {
+      "id": "api",
+      "name": "API Server",
+      "url": "http://localhost:3001",
+      "enabled": false,
+      "description": "OpenAPI specification parser and HTTP client",
+      "color": "#2196F3"
+    },
+    {
+      "id": "docs",
+      "name": "Docs Server",
+      "url": "http://localhost:3002",
+      "enabled": false,
+      "description": "Markdown document indexing and search",
+      "color": "#FF9800"
+    },
+    {
+      "id": "c4",
+      "name": "C4 Generator",
+      "url": "http://localhost:3003",
+      "enabled": false,
+      "description": "C4 architecture diagram generation",
+      "color": "#9C27B0"
+    },
+    {
+      "id": "mermaid",
+      "name": "Mermaid Generator",
+      "url": "http://localhost:3004",
+      "enabled": false,
+      "description": "Mermaid diagram generation (sequence, flow, etc.)",
+      "color": "#FF5722"
+    }
+  ]
+}

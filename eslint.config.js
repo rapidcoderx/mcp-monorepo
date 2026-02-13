@@ -1,0 +1,45 @@
+export default [
+  {
+    files: ["**/*.js"],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: "module",
+      globals: {
+        console: "readonly",
+        process: "readonly",
+        Buffer: "readonly",
+        URL: "readonly",
+        URLSearchParams: "readonly",
+        setTimeout: "readonly",
+        clearTimeout: "readonly",
+        setInterval: "readonly",
+        clearInterval: "readonly",
+        fetch: "readonly",
+      },
+    },
+    rules: {
+      "no-console": ["warn", { allow: ["error", "warn"] }],
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "prefer-const": "error",
+      "no-var": "error",
+      "eqeqeq": ["error", "always"],
+      "curly": ["error", "all"],
+      "brace-style": ["error", "1tbs"],
+      "indent": ["error", 2],
+      "quotes": ["error", "single", { avoidEscape: true }],
+      "semi": ["error", "always"],
+      "comma-dangle": ["error", "always-multiline"],
+      "no-trailing-spaces": "error",
+      "eol-last": ["error", "always"],
+    },
+  },
+  {
+    ignores: [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/.vscode/**",
+      "**/*.min.js",
+    ],
+  },
+];
