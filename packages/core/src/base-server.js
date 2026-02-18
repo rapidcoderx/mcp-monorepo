@@ -1,23 +1,30 @@
 /**
  * @fileoverview Base MCP server implementation with dual transport support.
  *
- * Follows the MCP SDK patterns:
- * - Stateful HTTP sessions (POST for JSON-RPC, GET for SSE, DELETE for session close)
- * - Server instance per session for HTTP transport
- * - StdioServerTransport for local/CLI usage
+ * Architecture principles:
+ * 1. McpServer from @modelcontextprotocol/sdk/server/mcp.js (modern API)
+ * 2. Zod schemas for runtime type validation (auto-converted from JSON Schema)
+ * 3. RFC 6570 URI templates for resources ({param}, {+path}, {/segment})
+ * 4. Factory pattern for creating isolated server instances per HTTP session
+ * 5. Stateful session management for StreamableHTTPServerTransport
+ *
+ * Transport modes:
+ * - Stdio: Single server instance, StdioServerTransport
+ * - HTTP: Server instance per session, StreamableHTTPServerTransport
+ *   - POST /mcp: JSON-RPC messages (initialize & subsequent calls)
+ *   - GET /mcp: SSE stream for server-initiated messages
+ *   - DELETE /mcp: Session termination
+ *   - GET /health: Health check
+ *   - GET /info: Server metadata
  *
  * @module @mcp/core
  * @see https://modelcontextprotocol.io
+ * @see https://tools.ietf.org/html/rfc6570 (URI Templates)
  */
 
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import {
-  ListToolsRequestSchema,
-  CallToolRequestSchema,
-  ListResourcesRequestSchema,
-  ReadResourceRequestSchema,
-  isInitializeRequest,
-} from '@modelcontextprotocol/sdk/types.js';
+import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
+import { z } from 'zod';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import http from 'node:http';
@@ -89,10 +96,13 @@ export class BaseMCPServer {
     /** @type {Map<string, Object>} Registered resources keyed by URI */
     this.resources = new Map();
 
+    /** @type {Map<string, Object>} Registered resource templates keyed by URI template */
+    this.resourceTemplates = new Map();
+
     /**
      * Active HTTP sessions keyed by session ID.
-     * Each entry holds { transport: StreamableHTTPServerTransport, server: Server }.
-     * @type {Map<string, {transport: StreamableHTTPServerTransport, server: Server}>}
+     * Each entry holds { transport: StreamableHTTPServerTransport, server: McpServer }.
+     * @type {Map<string, {transport: StreamableHTTPServerTransport, server: McpServer}>}
      * @private
      */
     this._sessions = new Map();
@@ -110,16 +120,18 @@ export class BaseMCPServer {
   // ---------------------------------------------------------------------------
 
   /**
-   * Create a new low-level MCP Server instance with all registered handlers.
+   * Create a new MCP Server instance with all registered handlers.
    *
    * A fresh instance is needed for each HTTP session (the SDK requires a 1-to-1
    * mapping between Server and Transport). For stdio, only one instance is used.
    *
+   * Uses McpServer which requires Zod schemas for type-safe validation.
+   *
    * @private
-   * @returns {Server}
+   * @returns {McpServer}
    */
   _createServerInstance() {
-    const serverInstance = new Server(
+    const serverInstance = new McpServer(
       {
         name: this.config.name,
         version: this.config.version,
@@ -132,28 +144,183 @@ export class BaseMCPServer {
       },
     );
 
-    // -- tools/list --------------------------------------------------------
-    serverInstance.setRequestHandler(ListToolsRequestSchema, async () => ({
-      tools: this.getTools(),
-    }));
+    // Register all tools with McpServer
+    // SDK signature: registerTool(name, config, handler)
+    // inputSchema should be a raw Zod shape object, not wrapped in z.object()
+    for (const [toolName, tool] of this.tools) {
+      const zodSchema = this._jsonSchemaToZod(tool.inputSchema.properties || {});
+      
+      serverInstance.registerTool(
+        toolName,
+        {
+          description: tool.description,
+          inputSchema: zodSchema, // Plain object with Zod properties, NOT z.object() wrapped
+        },
+        async (params) => {
+          this.logger.info('tools/call request', {
+            tool: toolName,
+            params,
+            paramsType: typeof params,
+            paramsKeys: params ? Object.keys(params) : [],
+          });
 
-    // -- tools/call --------------------------------------------------------
-    serverInstance.setRequestHandler(CallToolRequestSchema, async (request) =>
-      this.handleToolCall(request),
-    );
+          try {
+            const result = await tool.handler(params || {});
+            this.logger.info('tools/call response', {
+              tool: toolName,
+              success: !result.isError,
+            });
+            return result;
+          } catch (error) {
+            this.logger.error(`Error executing tool: ${toolName}`, {
+              error: error.message,
+              stack: error.stack,
+            });
+            return {
+              content: [{ type: 'text', text: `Error: ${error.message}` }],
+              isError: true,
+            };
+          }
+        }
+      );
+    }
 
-    // -- resources/list ----------------------------------------------------
-    serverInstance.setRequestHandler(ListResourcesRequestSchema, async () => ({
-      resources: this.getResources(),
-    }));
+    // Register all static resources
+    // SDK signature: registerResource(name, uri, config, readCallback)
+    for (const [uri, resource] of this.resources) {
+      serverInstance.registerResource(
+        resource.name,
+        uri,
+        {
+          description: resource.description,
+          mimeType: resource.mimeType,
+        },
+        async (receivedUri) => {
+          // SDK passes the URI directly as a string, not wrapped in {uri: ...}
+          const requestUri = typeof receivedUri === 'string' ? receivedUri : receivedUri?.uri || uri;
+          this.logger.info('resources/read request', { uri: requestUri });
 
-    // -- resources/read ----------------------------------------------------
-    serverInstance.setRequestHandler(
-      ReadResourceRequestSchema,
-      async (request) => this.handleResourceRead(request),
-    );
+          try {
+            const result = await resource.handler(requestUri);
+            this.logger.info('resources/read response', { uri: requestUri, success: true });
+            return result;
+          } catch (error) {
+            this.logger.error(`Error reading resource: ${requestUri}`, {
+              error: error.message,
+              stack: error.stack,
+            });
+            throw error;
+          }
+        }
+      );
+    }
+
+    // Register all resource templates
+    // SDK signature: registerResource(name, ResourceTemplate, config, readCallback)
+    for (const [uriTemplate, template] of this.resourceTemplates) {
+      const resourceTemplate = new ResourceTemplate(uriTemplate, {});
+      
+      serverInstance.registerResource(
+        template.name,
+        resourceTemplate,
+        {
+          description: template.description,
+          mimeType: template.mimeType,
+        },
+        async (uri) => {
+          // SDK passes the URI directly as a string, not wrapped in {uri: ...}
+          this.logger.info('resources/read RAW', { 
+            uriRaw: uri,
+            uriType: typeof uri,
+            uriValue: JSON.stringify(uri),
+          });
+          const requestUri = typeof uri === 'string' ? uri : uri?.uri || '';
+          this.logger.info('resources/read request', { 
+            uri: requestUri,
+          });
+
+          try {
+            const templateParams = this._matchUriTemplate(uriTemplate, requestUri);
+            if (!templateParams) {
+              throw new Error(`URI does not match template: ${requestUri}`);
+            }
+
+            const result = await template.handler(requestUri, templateParams);
+            this.logger.info('resources/read response (template)', {
+              uri: requestUri,
+              template: uriTemplate,
+              success: true,
+            });
+            return result;
+          } catch (error) {
+            this.logger.error(`Error reading resource from template: ${requestUri}`, {
+              error: error.message,
+              stack: error.stack,
+            });
+            throw error;
+          }
+        }
+      );
+    }
 
     return serverInstance;
+  }
+
+  /**
+   * Convert JSON Schema properties to Zod schema object.
+   * Supports basic types: string, number, boolean, object, array.
+   *
+   * @private
+   * @param {Object} jsonSchema - JSON Schema object
+   * @returns {Object} Zod schema properties
+   */
+  _jsonSchemaToZod(jsonSchema) {
+    const zodProps = {};
+
+    if (!jsonSchema || !jsonSchema.properties) {
+      return zodProps;
+    }
+
+    const required = jsonSchema.required || [];
+
+    for (const [key, prop] of Object.entries(jsonSchema.properties)) {
+      let zodType;
+
+      switch (prop.type) {
+      case 'string':
+        zodType = z.string();
+        break;
+      case 'number':
+      case 'integer':
+        zodType = z.number();
+        break;
+      case 'boolean':
+        zodType = z.boolean();
+        break;
+      case 'array':
+        zodType = z.array(z.any());
+        break;
+      case 'object':
+        zodType = z.object({});
+        break;
+      default:
+        zodType = z.any();
+      }
+
+      // Add description if available
+      if (prop.description) {
+        zodType = zodType.describe(prop.description);
+      }
+
+      // Make optional if not required
+      if (!required.includes(key)) {
+        zodType = zodType.optional();
+      }
+
+      zodProps[key] = zodType;
+    }
+
+    return zodProps;
   }
 
   // ---------------------------------------------------------------------------
@@ -193,32 +360,6 @@ export class BaseMCPServer {
     this.tools.set(tool.name, tool);
   }
 
-  /**
-   * Dispatch a tools/call request to the correct registered handler.
-   *
-   * @private
-   * @param {Object} request - MCP CallToolRequest
-   * @returns {Promise<Object>} CallToolResult
-   */
-  async handleToolCall(request) {
-    const toolName = request.params.name;
-    const tool = this.tools.get(toolName);
-
-    if (!tool) {
-      throw new Error(`Unknown tool: ${toolName}`);
-    }
-
-    try {
-      return await tool.handler(request.params.arguments || {});
-    } catch (error) {
-      this.logger.error(`Error executing tool: ${toolName}`, { error: error.message, stack: error.stack });
-      return {
-        content: [{ type: 'text', text: `Error: ${error.message}` }],
-        isError: true,
-      };
-    }
-  }
-
   // ---------------------------------------------------------------------------
   // Resource registration & handling
   // ---------------------------------------------------------------------------
@@ -238,26 +379,50 @@ export class BaseMCPServer {
   }
 
   /**
-   * Dispatch a resources/read request to the correct registered handler.
+   * Register a resource template with the server.
+   *
+   * @param {Object} template - Resource template definition
+   * @param {string} template.uriTemplate - URI template (e.g., 'file:///{path}')
+   * @param {string} template.name - Human-readable name
+   * @param {string} template.description - Description
+   * @param {string} [template.mimeType] - MIME type
+   * @param {Function} template.handler - Async function `(uri, params) => ReadResourceResult`
+   */
+  registerResourceTemplate(template) {
+    this.resourceTemplates.set(template.uriTemplate, template);
+  }
+
+  /**
+   * Match a URI against RFC 6570 URI template and extract parameters.
+   * Supports common RFC 6570 operators:
+   * - {param}   - simple string expansion (no reserved chars)
+   * - {+param}  - reserved string expansion (allows /, ?, etc.)
+   * - {/param}  - path segment prefix
    *
    * @private
-   * @param {Object} request - MCP ReadResourceRequest
-   * @returns {Promise<Object>} ReadResourceResult
+   * @param {string} template - RFC 6570 URI template (e.g., 'file:///{+path}')
+   * @param {string} uri - Actual URI
+   * @returns {Object|null} Extracted parameters or null if no match
    */
-  async handleResourceRead(request) {
-    const resourceUri = request.params.uri;
-    const resource = this.resources.get(resourceUri);
+  _matchUriTemplate(template, uri) {
+    // Convert RFC 6570 template to regex pattern
+    let pattern = template
+      // {+param} - reserved expansion (allows reserved chars including /)
+      .replace(/\{\+([^}]+)\}/g, (_, name) => `(?<${name}>.+)`)
+      // {/param} - path segment prefix
+      .replace(/\{\/([^}]+)\}/g, (_, name) => `(?:/(?<${name}>[^/]+))?`)
+      // {param} - simple expansion (no reserved chars, no /)
+      .replace(/\{([^}]+)\}/g, (_, name) => `(?<${name}>[^/?#]+)`);
 
-    if (!resource) {
-      throw new Error(`Unknown resource: ${resourceUri}`);
-    }
+    // Escape special regex chars in non-template parts
+    pattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '\\*');
 
-    try {
-      return await resource.handler(resourceUri);
-    } catch (error) {
-      this.logger.error(`Error reading resource: ${resourceUri}`, { error: error.message, stack: error.stack });
-      throw error;
-    }
+    const regex = new RegExp(`^${pattern}$`);
+    const match = uri.match(regex);
+
+    return match ? match.groups : null;
   }
 
   // ---------------------------------------------------------------------------
@@ -335,9 +500,25 @@ export class BaseMCPServer {
   async _handleMcpRequest(req, res) {
     const sessionId = req.headers['mcp-session-id'];
 
+    this.logger.debug('MCP request received', {
+      method: req.method,
+      sessionId: sessionId || 'none',
+      url: req.url,
+    });
+
     try {
       if (req.method === 'POST') {
         const body = await this._parseRequestBody(req);
+
+        // Log the JSON-RPC method
+        if (body && body.method) {
+          this.logger.info('MCP JSON-RPC request', {
+            method: body.method,
+            params: body.params,
+            id: body.id,
+            sessionId: sessionId || 'new',
+          });
+        }
 
         if (sessionId && this._sessions.has(sessionId)) {
           // Existing session — delegate to stored transport
@@ -608,6 +789,20 @@ export class BaseMCPServer {
       name: resource.name,
       description: resource.description,
       mimeType: resource.mimeType,
+    }));
+  }
+
+  /**
+   * Get the list of registered resource templates (for resources/templates/list responses).
+   * @protected
+   * @returns {Array<Object>}
+   */
+  getResourceTemplates() {
+    return Array.from(this.resourceTemplates.values()).map((template) => ({
+      uriTemplate: template.uriTemplate,
+      name: template.name,
+      description: template.description,
+      mimeType: template.mimeType,
     }));
   }
 }

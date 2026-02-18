@@ -144,6 +144,11 @@ Available Tools:
 - reverse: Reverses text
 - uppercase: Converts text to uppercase
 
+Available Resources:
+- echo://info: Server information (static)
+- echo://content/{type}: Dynamic content by type (template)
+- echo://data/{format}/{name}: Sample data in different formats (template)
+
 Transport: ${this.config.transport}
 ${this.config.transport === 'http' ? `Port: ${this.config.port}` : ''}`,
             },
@@ -152,7 +157,120 @@ ${this.config.transport === 'http' ? `Port: ${this.config.port}` : ''}`,
       },
     });
 
-    this.logger?.info('Echo server handlers registered');
+    // Register resource template for dynamic content
+    this.registerResourceTemplate({
+      uriTemplate: 'echo://content/{type}',
+      name: 'Dynamic Content',
+      description: 'Get content by type (text, json, html)',
+      mimeType: 'text/plain',
+      handler: async (uri, params) => {
+        const { type } = params;
+
+        const contentMap = {
+          text: {
+            mimeType: 'text/plain',
+            text: 'This is plain text content from the echo server.',
+          },
+          json: {
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              message: 'This is JSON content',
+              timestamp: new Date().toISOString(),
+              server: 'echo-server',
+            }, null, 2),
+          },
+          html: {
+            mimeType: 'text/html',
+            text: '<html><body><h1>Echo Server</h1><p>This is HTML content.</p></body></html>',
+          },
+          markdown: {
+            mimeType: 'text/markdown',
+            text: '# Echo Server\\n\\n## Dynamic Content\\n\\nThis is **markdown** content with *formatting*.',
+          },
+        };
+
+        const content = contentMap[type];
+        if (!content) {
+          throw new Error(`Unknown content type: ${type}. Available types: text, json, html, markdown`);
+        }
+
+        this.logger?.info('Resource template accessed', { uri, type });
+
+        return {
+          contents: [
+            {
+              uri,
+              mimeType: content.mimeType,
+              text: content.text,
+            },
+          ],
+        };
+      },
+    });
+
+    // Register another template for data in different formats
+    this.registerResourceTemplate({
+      uriTemplate: 'echo://data/{format}/{name}',
+      name: 'Sample Data',
+      description: 'Get sample data by format and name',
+      mimeType: 'application/json',
+      handler: async (uri, params) => {
+        const { format, name } = params;
+
+        this.logger?.info('Data resource template accessed', { uri, format, name });
+
+        const data = {
+          format,
+          name,
+          timestamp: new Date().toISOString(),
+          data: {
+            message: `Sample ${format} data for ${name}`,
+            items: [1, 2, 3, 4, 5],
+            nested: {
+              key: 'value',
+              array: ['a', 'b', 'c'],
+            },
+          },
+        };
+
+        let text;
+        let mimeType;
+
+        switch (format) {
+        case 'json':
+          text = JSON.stringify(data, null, 2);
+          mimeType = 'application/json';
+          break;
+        case 'yaml':
+          // Simple YAML conversion for demonstration
+          text = `format: ${format}\\nname: ${name}\\ntimestamp: ${data.timestamp}\\ndata:\\n  message: "${data.data.message}"`;
+          mimeType = 'text/yaml';
+          break;
+        case 'csv':
+          text = 'key,value\\nformat,' + format + '\\nname,' + name + '\\ntimestamp,' + data.timestamp;
+          mimeType = 'text/csv';
+          break;
+        default:
+          throw new Error(`Unknown format: ${format}. Available formats: json, yaml, csv`);
+        }
+
+        return {
+          contents: [
+            {
+              uri,
+              mimeType,
+              text,
+            },
+          ],
+        };
+      },
+    });
+
+    this.logger?.info('Echo server handlers registered', {
+      tools: this.tools.size,
+      resources: this.resources.size,
+      resourceTemplates: this.resourceTemplates.size,
+    });
   }
 }
 

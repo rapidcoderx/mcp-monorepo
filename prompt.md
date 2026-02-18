@@ -5,60 +5,61 @@ This file maintains continuity between sessions by tracking what was accomplishe
 
 ---
 
-## End of Session 1 Summary (February 12, 2026, 21:53)
+## End of Session 3 Summary (February 13, 2026, 11:12)
 
 ### Session Goal:
-Implement MCP Monorepo Framework foundation and interactive dashboard with multi-server support
+Enhance logging and implement resource templates support to create a comprehensive boilerplate
 
 ---
 
 ## ✅ What Was Accomplished This Session
 
-### 1. Project Infrastructure (COMPLETE)
-- ✅ Created tracking files (AGENTS.md, HANDOFF.md, prompt.md)
-- ✅ Set up Copilot instructions (.github/copilot-instructions.md)
-- ✅ Repository structure with npm workspaces
-- ✅ ESLint, Prettier, .gitignore configuration
+### 1. Comprehensive Request/Response Logging (COMPLETE)
+- ✅ Added detailed logging for all MCP JSON-RPC requests
+- ✅ Log tool calls with parameters and results
+- ✅ Log resource reads with URI and template matching
+- ✅ Log HTTP transport details (method, sessionId, URL)
+- ✅ Enhanced error logging with stack traces
+- ✅ All operations logged at appropriate levels (info/debug/warn/error)
 
-### 2. Core Framework (@mcp/core) (COMPLETE)
-- ✅ BaseMCPServer class with dual transport (stdio + HTTP)
-- ✅ Middleware system (error handling, logging)
-- ✅ Utility functions (HTTP client, formatters, validators)
-- ✅ Complete JSDoc documentation
-- ✅ Published endpoints: /health, /info, /mcp
+### 2. Resource Templates Implementation (COMPLETE)
+- ✅ Added `ListResourceTemplatesRequestSchema` support
+- ✅ Implemented `resourceTemplates` Map in BaseMCPServer
+- ✅ Added `registerResourceTemplate()` method
+- ✅ Implemented `resources/templates/list` handler
+- ✅ Enhanced `handleResourceRead()` with template matching
+- ✅ Added URI template parameter extraction with `_matchUriTemplate()`
+- ✅ Fixed "Method not found" error for `resources/templates/list`
 
-### 3. Echo Server (@mcp/echo-server) (COMPLETE)
-- ✅ Sample server with 3 tools (echo, reverse, uppercase)
-- ✅ CLI argument parsing for transport selection
-- ✅ Successfully tested in HTTP mode on port 3000
-- ✅ Demonstrates framework usage pattern
+### 3. Echo Server Enhancement (COMPLETE)
+- ✅ Updated static resource with comprehensive documentation
+- ✅ Added `echo://content/{type}` template (text, json, html, markdown)
+- ✅ Added `echo://data/{format}/{name}` template (json, yaml, csv)
+- ✅ Demonstrates dynamic MIME types
+- ✅ Shows multi-parameter template matching
+- ✅ Enhanced startup logging with counts
 
-### 4. Dashboard (@mcp/dashboard) (COMPLETE)
-- ✅ React + Vite application
-- ✅ Express server for production (port 8080)
-- ✅ Configuration-driven architecture (dashboard-config.json)
-- ✅ ServerSelector component - dropdown for switching servers
-- ✅ MultiServerStatus component - overview grid with health checks
-- ✅ MCP Inspector - tool testing interface
-- ✅ Resource Viewer - browse MCP resources
-- ✅ Endpoint Tester - HTTP/MCP validation
-- ✅ **Fixed App.jsx corruption** - integrated all components successfully
-- ✅ **Multi-server UI working** - tested with echo server on port 5174
-- ✅ Created dashboard-config.sample.json with all 5 planned servers
-- ✅ Created dashboard-config.json with only echo server (current implementation)
-
-### 5. Testing & Validation
-- ✅ npm install - 274 packages, 0 vulnerabilities
-- ✅ MCP SDK integration fixed (schema objects)
-- ✅ HTTP transport validated
-- ✅ Dashboard successfully connects to echo server
-- ✅ All endpoints tested and working
+### Example Logging Output:
+```
+[INFO] MCP JSON-RPC request {"method":"resources/templates/list","params":{},"id":1}
+[INFO] resources/templates/list response {"count":2}
+[INFO] resources/read request {"uri":"echo://content/json"}
+[INFO] Resource template accessed {"uri":"echo://content/json","type":"json"}
+[INFO] resources/read response (template) {"uri":"echo://content/json","template":"echo://content/{type}","success":true}
+```
 
 ---
 
 ## 🎯 What Needs To Be Done Next Session
 
-### Priority 1 - Implement Additional Servers
+### Priority 1 - Test Enhanced Features
+- [ ] Restart echo server and verify enhanced logging
+- [ ] Test `resources/templates/list` endpoint
+- [ ] Test template URIs: `echo://content/json`, `echo://data/yaml/users`
+- [ ] Verify all log messages appear correctly
+- [ ] Test from dashboard UI
+
+### Priority 2 - Implement Additional Servers
 
 #### 1. API Server (packages/servers/api-server/)
 - [ ] Create package structure
